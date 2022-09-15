@@ -1,0 +1,93 @@
+# Where we were?
+
+```elixir
+Mix.install([
+  {:oauth2, "~> 2.0"},
+  {:kino, "~> 0.6.2"}
+])
+```
+
+## Intro
+
+Using Elixir to extract metadata from my photos on Google Photos and plot places where I visited.
+
+## OAuth2 Boilerplate
+
+```elixir
+input_client_id = Kino.Input.text("Google Client ID")
+```
+
+```elixir
+input_client_secret = Kino.Input.text("Google Client Secret")
+```
+
+```elixir
+client_id = Kino.Input.read(input_client_id)
+client_secret = Kino.Input.read(input_client_secret)
+
+client =
+  OAuth2.Client.new(
+    # default
+    strategy: OAuth2.Strategy.AuthCode,
+    client_id: client_id,
+    client_secret: client_secret,
+    authorize_url: "https://accounts.google.com/o/oauth2/auth",
+    token_url: "https://accounts.google.com/o/oauth2/token",
+    redirect_uri: "https://localhost:8080",
+    site: "https://photoslibrary.googleapis.com",
+    params: %{
+      scope: "https://www.googleapis.com/auth/photoslibrary.readonly"
+    }
+  )
+  |> OAuth2.Client.put_serializer("application/json", Jason)
+
+oauth_url = OAuth2.Client.authorize_url!(client)
+
+Kino.Markdown.new("""
+[Click here to continue authentication](#{oauth_url})
+""")
+```
+
+```elixir
+input_token = Kino.Input.text("Google Token")
+```
+
+```elixir
+token = Kino.Input.read(input_token)
+client = OAuth2.Client.get_token!(client, code: token)
+```
+
+## Listing albuns from user
+
+```elixir
+resource = OAuth2.Client.get!(client, "https://photoslibrary.googleapis.com/v1/albums").body
+```
+
+## Listing photos from album
+
+```elixir
+%{"id" => albumId} = List.first(resource["albums"])
+
+%OAuth2.Response{
+  body: resource
+} =
+  OAuth2.Client.post!(client, "https://photoslibrary.googleapis.com/v1/mediaItems:search", %{
+    "albumId" => albumId
+  })
+
+resource
+```
+
+```elixir
+%{"baseUrl" => image_url} = List.last(resource["mediaItems"])
+```
+
+```elixir
+image_url
+```
+
+```elixir
+Kino.Markdown.new("""
+![](#{image_url})
+""")
+```
